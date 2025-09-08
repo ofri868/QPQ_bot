@@ -35,7 +35,7 @@ app = FastAPI()
 async def root():
     return {"status": "ok", "bot": str(bot.user)}
 
-@app.head("/health")
+@app.head("/")
 async def health_check():
     return {"status": "ok"}
 
