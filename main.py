@@ -211,7 +211,7 @@ async def removeitem(
     uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
     uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
     amount: int = Option(default=1, description="Amount of items", required=False),
-    qpq_purchase: bool = Option(default=False, description="Was this a QPQ purchase?", required=False)
+    qpq_sale: bool = Option(default=False, description="Was this a QPQ sale?", required=False)
 ):
     try:
         verify_amount(str(amount))
@@ -222,14 +222,14 @@ async def removeitem(
         return
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), qpq_purchase), timeout=600)
+        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), qpq_sale), timeout=600)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
     
-async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, qpq_purchase):
-    username = "QPQ" if qpq_purchase else ctx.author.name
+async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, qpq_sale):
+    username = "QPQ" if qpq_sale else ctx.author.name
     uvs = []
     if item_type == "Gear":
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
