@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+
+# Secrets
+*.env
+arched-elixir-471411-e0-0a32c7ac4698.json
+
+# VSCode
+.vscode/
