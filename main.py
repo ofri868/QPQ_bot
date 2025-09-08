@@ -2,7 +2,7 @@ import asyncio
 import gspread
 import discord
 from discord.ext import commands
-from discord import Option
+from discord.commands import Option
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
