@@ -32,8 +32,8 @@ spreadsheet = client_gs.open(SHEET_NAME)
 app = FastAPI()
 
 @app.get("/")
-def ping():
-    return {"status": "ok"}
+async def root():
+    return {"status": "ok", "bot": str(bot.user)}
 
 @bot.event
 async def on_ready():
@@ -262,5 +262,9 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     msg = "\n".join(parts)
     await ctx.respond(msg)
 import threading
-threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
-bot.run(DISCORD_TOKEN)
+def run_web():
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
+if __name__ == "__main__":
+    threading.Thread(target=run_web).start()
+    bot.run("DISCORD_TOKEN")
