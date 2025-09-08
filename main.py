@@ -35,6 +35,10 @@ app = FastAPI()
 async def root():
     return {"status": "ok", "bot": str(bot.user)}
 
+@app.head("/health")
+async def health_check():
+    return {"status": "ok"}
+
 @bot.event
 async def on_ready():
     print(f"Bot is online as {bot.user}")
