@@ -1,5 +1,4 @@
 import asyncio
-import json
 import gspread
 import discord
 from discord.ext import commands
@@ -10,28 +9,20 @@ from dotenv import load_dotenv
 import os
 
 # --- Environment Setup ---
-# load_dotenv()
-# DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-SHEET_NAME = "QPQ test sheet"
-SERVER_ID = 1338909418749956212
-TEST_SERVER_ID = 1414309369255956573
+load_dotenv()
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+SHEET_NAME = os.getenv("SHEET_NAME")
+SERVER_ID = int(os.getenv("SERVER_ID"))
+TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
 
 # --- Google Sheets Setup ---
-gs_creds_json = os.environ.get("GS_CREDENTIALS_JSON")
-if not gs_creds_json:
-    raise ValueError("Google Sheets credentials JSON missing!")
+scope = ["https://spreadsheets.google.com/feeds",
+         "https://www.googleapis.com/auth/spreadsheets",
+         "https://www.googleapis.com/auth/drive.file",
+         "https://www.googleapis.com/auth/drive"]
 
-creds_dict = json.loads(gs_creds_json)
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/drive"
-]
-creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
 client_gs = gspread.authorize(creds)
-
-DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 intents = discord.Intents.default()
 intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents)
