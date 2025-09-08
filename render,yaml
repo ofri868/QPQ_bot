@@ -1,0 +1,13 @@
+services:
+  - type: background
+    name: discord-bot
+    env: python
+    region: oregon # You can choose your preferred region
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    autoDeploy: true
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+        generateValue: ""
