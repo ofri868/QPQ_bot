@@ -1,8 +1,8 @@
 services:
-  - type: background
+  - type: web
     name: discord-bot
-    env: python
-    region: oregon # You can choose your preferred region
+    runtime: python
+    region: oregon   # or closest to you
     plan: free
     buildCommand: "pip install -r requirements.txt"
     startCommand: "python main.py"
@@ -10,4 +10,7 @@ services:
     envVars:
       - key: DISCORD_TOKEN
         sync: false
-        generateValue: ""
+      - key: PREFIX
+        sync: false
+      - key: DATABASE_URL
+        sync: false
