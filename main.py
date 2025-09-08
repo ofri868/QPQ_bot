@@ -3,7 +3,9 @@ import gspread
 import discord
 from discord.ext import commands
 from discord.commands import Option
+from fastapi import FastAPI
 import gspread
+import uvicorn
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
 import os
@@ -27,6 +29,11 @@ intents = discord.Intents.default()
 intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 spreadsheet = client_gs.open(SHEET_NAME)
+app = FastAPI()
+
+@app.get("/")
+def ping():
+    return {"status": "ok"}
 
 @bot.event
 async def on_ready():
@@ -254,4 +261,6 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     parts.append(f"- Removed from: {user_column}")
     msg = "\n".join(parts)
     await ctx.respond(msg)
+import threading
+threading.Thread(target=lambda: uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))).start()
 bot.run(DISCORD_TOKEN)
