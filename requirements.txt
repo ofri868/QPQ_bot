@@ -9,7 +9,6 @@ certifi==2025.8.3
 charset-normalizer==3.4.3
 click==8.2.1
 colorama==0.4.6
-discord.py==2.6.3
 fastapi==0.116.1
 frozenlist==1.7.0
 google-auth==2.40.3
