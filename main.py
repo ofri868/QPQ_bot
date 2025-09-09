@@ -8,7 +8,7 @@ import gspread
 import uvicorn
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
-import os
+import requests, time, os, threading
 
 # --- Environment Setup ---
 load_dotenv()
@@ -265,10 +265,19 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     parts.append(f"- Removed from: {user_column}")
     msg = "\n".join(parts)
     await ctx.respond(msg)
-import threading
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
+def self_ping():
+    url = "https://qpq-bot.onrender.com/"
+    while True:
+        try:
+            requests.get(url)
+        except Exception as e:
+            print("Ping failed:", e)
+        time.sleep(600)  # every 10 minutes
+
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
+    threading.Thread(target=self_ping, daemon=True).start()
     bot.run(DISCORD_TOKEN)
