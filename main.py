@@ -315,6 +315,22 @@ async def process_recap(ctx):
     msg = "\n".join(parts)
     await ctx.respond(msg)
 
+@bot.slash_command(name="clearrecap", description="clear all items in recap", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def clear_recap(
+    ctx: discord.ApplicationContext
+):
+    await ctx.defer()
+    try:
+        await asyncio.wait_for(process_switch_sheet(ctx), timeout=60)
+    except asyncio.TimeoutError:
+        await ctx.followup.send("The command timed out.")
+
+async def process_switch_sheet(ctx):
+    global recent_changes
+    recent_changes = []
+    await ctx.respond(f"Recent changes cleared.")
+    return
+
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
