@@ -16,6 +16,8 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 SHEET_NAME = os.getenv("SHEET_NAME")
 SERVER_ID = int(os.getenv("SERVER_ID"))
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
+test = SHEET_NAME == "QPQ test sheet"
+recent_changes = []
 
 # --- Google Sheets Setup ---
 scope = ["https://spreadsheets.google.com/feeds",
@@ -25,6 +27,8 @@ scope = ["https://spreadsheets.google.com/feeds",
 
 creds = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
 client_gs = gspread.authorize(creds)
+
+# --- Discord Bot Setup ---
 intents = discord.Intents.default()
 intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -77,7 +81,7 @@ def uvs_to_string(uvs):
     return " ".join([f"{uv_type} {uv_level}" for uv_type, uv_level in uvs_sorted])
 
 async def uv_level_autocomplete(ctx: discord.AutocompleteContext):
-    focused = ctx.focused.name  # this is the option name, e.g. "uv1_level"
+    focused = ctx.focused.name
     uv_type_option = focused.replace("_level", "_type")
     uv_type = ctx.options.get(uv_type_option)
 
@@ -133,6 +137,8 @@ def verify_username(username):
 def verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     if (not uv1_type and uv1_level) or (not uv2_type and uv2_level) or (not uv3_type and uv3_level):
         raise ValueError("If specifying UV levels, UV types must also be specified.")
+
+
 
 @bot.slash_command(name="additem", description="Add an item to the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def additem(
@@ -190,12 +196,15 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         sheet.update_cell(row, offset + user_index, current_amount + amount)
     else:
         sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, username), value_input_option="USER_ENTERED")
+        recent_changes.append(f"Added item: {name}, Type: {item_type}, UVs: {uvs_to_string(uvs)}, Amount: {amount}, Price: {price or 'N/A'}, Added to: {user_column}{' (QPQ Purchase)' if qpq_purchase else ''}")
     parts = [f"Added item: {name}"]
     if item_type == "Gear":
         parts.append(f"UVs: {uvs_to_string(uvs)}")
     parts.append(f"Amount: {amount}")
     parts.append(f"- Price: {price or 'N/A'}")
     parts.append(f"- Added to: {user_column}")
+    if test:
+        parts.append(f"- Note: This action was performed in the test sheet.")
     msg = "\n".join(parts)
     await ctx.respond(msg)
 
@@ -222,7 +231,7 @@ async def removeitem(
         return
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), qpq_sale), timeout=600)
+        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), qpq_sale), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
@@ -255,6 +264,8 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
             await ctx.respond(f"Cannot remove {amount} {name} from {user_column}. Current amount is {current_amount}.")
             return
         sheet.update_cell(row, offset + user_index, current_amount - amount if current_amount - amount > 0 else "")
+        if(sheet.cell(row, offset).value == "0"):
+            recent_changes.append(f"Removed item: {name}, Type: {item_type}, UVs: {uvs_to_string(uvs)}, Amount: {amount}, Removed from: {user_column}{' (QPQ Sale)' if qpq_sale else ''}")
     else:
         await ctx.respond(f"Item '{name}' not found in inventory.")
         return
@@ -263,8 +274,47 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
         parts.append(f"UVs: {uvs_to_string(uvs)}")
     parts.append(f"Amount: {amount}")
     parts.append(f"- Removed from: {user_column}")
+    if test:
+        parts.append(f"- Note: This action was performed in the test sheet.")
     msg = "\n".join(parts)
     await ctx.respond(msg)
+
+@bot.slash_command(name="switchsheet", description="Switch to a different sheet", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def switchsheet(
+    ctx: discord.ApplicationContext,
+    sheet_name: str = Option(description="Name of the new sheet", required=True, autocomplete=["QPQ test sheet", "Quid Pro Quo Merch Sheet"])
+):
+    await ctx.defer()
+    try:
+        await asyncio.wait_for(process_switch_sheet(ctx, sheet_name), timeout=60)
+    except asyncio.TimeoutError:
+        await ctx.followup.send("The command timed out.")
+
+async def process_switch_sheet(ctx, sheet_name):
+    SHEET_NAME = sheet_name
+    global test
+    test = SHEET_NAME == "QPQ test sheet"
+    await ctx.respond(f"Switched to sheet: {SHEET_NAME}")
+    return   
+
+@bot.slash_command(name="recap", description="Get a recap of all new or removed items", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def recap(ctx: discord.ApplicationContext):
+    await ctx.defer()
+    try:
+        await asyncio.wait_for(process_recap(ctx), timeout=60)
+    except asyncio.TimeoutError:
+        await ctx.followup.send("The command timed out.")
+
+async def process_recap(ctx):
+    if not recent_changes:
+        await ctx.respond("No recent changes.")
+        return
+    parts = ["Recent Changes:"]
+    for change in recent_changes:
+        parts.append(change)
+    msg = "\n".join(parts)
+    await ctx.respond(msg)
+
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
