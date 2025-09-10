@@ -295,7 +295,7 @@ async def process_switch_sheet(ctx, sheet_name):
     SHEET_NAME = sheet_name
     global test
     test = SHEET_NAME == "QPQ test sheet"
-    await ctx.respond(f"Switched to sheet: {SHEET_NAME}")
+    await ctx.followup.send(f"Switched to sheet: {SHEET_NAME}")
     return   
 
 @bot.slash_command(name="recap", description="Get a recap of all new or removed items", guild_ids=[SERVER_ID, TEST_SERVER_ID])
