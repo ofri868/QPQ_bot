@@ -1,4 +1,5 @@
 import asyncio
+from random import choices
 import gspread
 import discord
 from discord.ext import commands
@@ -282,7 +283,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
 @bot.slash_command(name="switchsheet", description="Switch to a different sheet", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def switchsheet(
     ctx: discord.ApplicationContext,
-    sheet_name: str = Option(description="Name of the new sheet", required=True, autocomplete=["QPQ test sheet", "Quid Pro Quo Merch Sheet"])
+    sheet_name: str = Option(description="Name of the new sheet", required=True, choices=["QPQ test sheet", "Quid Pro Quo Merch Sheet"])
 ):
     await ctx.defer()
     try:
