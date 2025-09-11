@@ -19,6 +19,7 @@ SERVER_ID = int(os.getenv("SERVER_ID"))
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
 test = SHEET_NAME == "QPQ test sheet"
 recent_changes = []
+ping_needed = True
 
 # --- Google Sheets Setup ---
 scope = ["https://spreadsheets.google.com/feeds",
@@ -42,6 +43,8 @@ async def root():
 
 @app.head("/")
 async def health_check():
+    if ping_needed:
+        ping_needed = False
     return {"status": "ok"}
 
 @bot.event
@@ -170,7 +173,6 @@ async def additem(
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
-    
 async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, qpq_purchase):
     username = "QPQ" if qpq_purchase else ctx.author.name
     uvs = []
@@ -237,7 +239,6 @@ async def removeitem(
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
-    
 async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, qpq_sale):
     username = "QPQ" if qpq_sale else ctx.author.name
     uvs = []
@@ -290,7 +291,6 @@ async def switchsheet(
         await asyncio.wait_for(process_switch_sheet(ctx, sheet_name), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
-
 async def process_switch_sheet(ctx, sheet_name):
     SHEET_NAME = sheet_name
     global test
@@ -305,7 +305,6 @@ async def recap(ctx: discord.ApplicationContext):
         await asyncio.wait_for(process_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
-
 async def process_recap(ctx):
     if not recent_changes:
         await ctx.respond("No recent changes.")
@@ -325,7 +324,6 @@ async def clear_recap(
         await asyncio.wait_for(process_clear_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
-
 async def process_clear_recap(ctx):
     global recent_changes
     recent_changes = []
@@ -339,10 +337,11 @@ def self_ping():
     url = "https://qpq-bot.onrender.com/"
     while True:
         try:
-            requests.get(url)
+            if not ping_needed:
+                requests.head(url)
         except Exception as e:
             print("Ping failed:", e)
-        time.sleep(86400)  # every day
+        time.sleep(840)  # every 14 minutes
 
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
