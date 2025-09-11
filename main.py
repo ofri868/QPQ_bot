@@ -322,11 +322,11 @@ async def clear_recap(
 ):
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_switch_sheet(ctx), timeout=60)
+        await asyncio.wait_for(process_clear_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
 
-async def process_switch_sheet(ctx):
+async def process_clear_recap(ctx):
     global recent_changes
     recent_changes = []
     await ctx.respond(f"Recent changes cleared.")
@@ -335,16 +335,16 @@ async def process_switch_sheet(ctx):
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
-# def self_ping():
-#     url = "https://qpq-bot.onrender.com/"
-#     while True:
-#         try:
-#             requests.get(url)
-#         except Exception as e:
-#             print("Ping failed:", e)
-#         time.sleep(600)  # every 10 minutes
+def self_ping():
+    url = "https://qpq-bot.onrender.com/"
+    while True:
+        try:
+            requests.get(url)
+        except Exception as e:
+            print("Ping failed:", e)
+        time.sleep(86400)  # every day
 
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
-    # threading.Thread(target=self_ping, daemon=True).start()
+    threading.Thread(target=self_ping, daemon=True).start()
     bot.run(DISCORD_TOKEN)
