@@ -337,6 +337,7 @@ def self_ping():
     url = "https://qpq-bot.onrender.com/"
     while True:
         try:
+            global ping_needed
             if not ping_needed:
                 requests.head(url)
         except Exception as e:
