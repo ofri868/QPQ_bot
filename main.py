@@ -43,6 +43,7 @@ async def root():
 
 @app.head("/")
 async def health_check():
+    global ping_needed
     if ping_needed:
         ping_needed = False
     return {"status": "ok"}
