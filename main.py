@@ -110,7 +110,7 @@ def get_row_number(item_type, name, uvs = None):
                     return i
     else:
         for i, n in enumerate(names, start=1):
-            if n == name:
+            if n.strip() == name:
                 return i
     return None
 
