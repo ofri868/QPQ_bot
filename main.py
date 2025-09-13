@@ -14,7 +14,7 @@ import requests, time, os, threading
 # --- Environment Setup ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-SHEET_NAME = os.getenv("SHEET_NAME")
+SHEET_NAME = "Quid Pro Quo Merch Sheet"
 SERVER_ID = int(os.getenv("SERVER_ID"))
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
 test = SHEET_NAME == "QPQ test sheet"
