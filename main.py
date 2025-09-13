@@ -149,7 +149,7 @@ def verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
 @bot.slash_command(name="additem", description="Add an item to the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def additem(
     ctx: discord.ApplicationContext,
-    name: str = Option(description="Name of the item", choices=ITEM_LIST, required=True, autocomplete=item_name_autocomplete),
+    name: str = Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
     item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES),
     uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
     uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
@@ -217,7 +217,7 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
 async def removeitem(
     ctx: discord.ApplicationContext,
     name: str,
-    item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES),
+    item_type: str = Option(description="Choose the item type", required=True, autocomplete=item_name_autocomplete),
     uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
     uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
     uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
