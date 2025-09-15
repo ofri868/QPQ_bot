@@ -200,7 +200,7 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         sheet.update_cell(row, offset + user_index, current_amount + amount)
     else:
         sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, username), value_input_option="USER_ENTERED")
-        recent_changes.append(f"Added item: {name}, Type: {item_type}{", UVs: " + uvs_to_string(uvs) if item_type == "Gear" else ""}, Price: {price or 'N/A'}, Added to: {user_column}{', (QPQ Purchase)' if qpq_purchase else ''}")
+        recent_changes.append(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {user_column}{', (QPQ Purchase)' if qpq_purchase else ''}")
     parts = [f"Added item: {name}"]
     if item_type == "Gear":
         parts.append(f"UVs: {uvs_to_string(uvs)}")
@@ -269,7 +269,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
         sheet.update_cell(row, offset + user_index, current_amount - amount if current_amount - amount > 0 else "")
         if(sheet.cell(row, offset).value == "0"):
             sheet.delete_row(row)
-            recent_changes.append(f"Removed item: {name}, Type: {item_type}{", UVs: " + uvs_to_string(uvs) if item_type == "Gear" else ""}, Amount: {amount}, Removed from: {user_column}{' (QPQ Sale)' if qpq_sale else ''}")
+            recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Amount: {amount}, Removed from: {user_column}{' (QPQ Sale)' if qpq_sale else ''}")
     else:
         await ctx.respond(f"Item '{name}' not found in inventory.")
         return
