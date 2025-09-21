@@ -1,14 +1,16 @@
+import os
 import asyncio
 import gspread
 import discord
 from discord.ext import commands
 from discord.commands import Option
 from fastapi import FastAPI
-import gspread
 import uvicorn
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
-import requests, time, os, threading
+import requests
+import threading
+import time
 
 # --- Environment Setup ---
 load_dotenv()
@@ -31,7 +33,7 @@ client_gs = gspread.authorize(creds)
 # --- Discord Bot Setup ---
 intents = discord.Intents.default()
 intents.messages = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(intents=intents)
 spreadsheet = client_gs.open(SHEET_NAME)
 app = FastAPI()
 
@@ -62,7 +64,8 @@ USERNAME_DICT = {
     "watwaba": ["Rex", 3],
     "jimby0117": ["Jimbo", 4],
     "bardly_trying": ["Aru", 5],
-    "dabomber.": ["Ori", 6]
+    "dabomber.": ["Ori", 6],
+    "QPQ": ["QPQ", 7]
 }
 UV_LEVELS = {
     "CTR": ["Low", "Med", "High", "Very High"],
@@ -113,9 +116,8 @@ def get_row_number(item_type, name, uvs = None):
                 return i
     return None
 
-def make_new_row(name, item_type, uvs, amount, price, username):
+def make_new_row(name, item_type, uvs, amount, price, user_index):
     offset = 2 if item_type != "Gear" else 3
-    _, user_index = USERNAME_DICT[username]
     sheet = spreadsheet.worksheet(item_type)
     user_col = offset-1 + user_index
     num_users = 7
@@ -130,6 +132,15 @@ def make_new_row(name, item_type, uvs, amount, price, username):
     last_col = chr(ord("A") + offset + num_users - 1)
     row[offset-1] = f"=SUM({first_col}{next_row}:{last_col}{next_row})"
     return row
+
+def get_name(name, owner):
+    if owner:
+        for (name, index) in USERNAME_DICT.values():
+            if name == owner:
+                return owner, index
+    else:
+        verify_username(name)
+        return USERNAME_DICT[name]
 
 def verify_amount(amount):
     if not amount.isdigit() or int(amount) < 1:
@@ -158,7 +169,7 @@ async def additem(
     uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
     amount: int = Option(default=1, description="Amount of items", required=False),
     price: int = Option(default=None, description="Price of the item", required=False),
-    qpq_purchase: bool = Option(default=False, description="Was this a QPQ purchase?", required=False)
+    owner: str = Option(default=None, description="Specify a different user to add the item to", required=False, choices=list(map(lambda x: x[0], USERNAME_DICT.values())))
 ):
     try:
         verify_amount(str(amount))
@@ -169,13 +180,13 @@ async def additem(
         return
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, qpq_purchase), timeout=60)
+        await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
-async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, qpq_purchase):
-    username = "QPQ" if qpq_purchase else ctx.author.name
+async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner=None):
+    username, user_index = get_name(ctx.author.name, owner)
     uvs = []
     if item_type == "Gear": 
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
@@ -192,21 +203,20 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         return
     row = get_row_number(item_type, name, uvs)
     offset = 2 if item_type != "Gear" else 3
-    user_column, user_index = USERNAME_DICT[username]
     user_col = offset + user_index
     if row:
         current_value = sheet.cell(row, user_col).value
         current_amount = int(current_value) if current_value and current_value.isdigit() else 0
         sheet.update_cell(row, offset + user_index, current_amount + amount)
     else:
-        sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, username), value_input_option="USER_ENTERED")
-        recent_changes.append(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {user_column}{', (QPQ Purchase)' if qpq_purchase else ''}")
+        sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index), value_input_option="USER_ENTERED")
+        recent_changes.append(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {username}")
     parts = [f"Added item: {name}"]
     if item_type == "Gear":
         parts.append(f"UVs: {uvs_to_string(uvs)}")
     parts.append(f"- Amount: {amount}")
     parts.append(f"- Price: {price or 'N/A'}")
-    parts.append(f"- Added to: {user_column}")
+    parts.append(f"- Added to: {username}")
     if test:
         parts.append(f"- Note: This action was performed in the test sheet.")
     msg = "\n".join(parts)
@@ -224,7 +234,7 @@ async def removeitem(
     uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
     uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
     amount: int = Option(default=1, description="Amount of items", required=False),
-    qpq_sale: bool = Option(default=False, description="Was this a QPQ sale?", required=False)
+    owner: str = Option(default=None, description="Specify a different user to add the item to", required=False, choices=list(map(lambda x: x[0], USERNAME_DICT.values())))
 ):
     try:
         verify_amount(str(amount))
@@ -235,13 +245,13 @@ async def removeitem(
         return
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), qpq_sale), timeout=60)
+        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
-async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, qpq_sale):
-    username = "QPQ" if qpq_sale else ctx.author.name
+async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner):
+    username, user_index = get_name(ctx.author.name, owner)
     uvs = []
     if item_type == "Gear":
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
@@ -258,18 +268,17 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
         return
     row = get_row_number(item_type, name, uvs)
     offset = 2 if item_type != "Gear" else 3
-    user_column, user_index = USERNAME_DICT[username]
     user_col = offset + user_index
     if row:
         current_value = sheet.cell(row, user_col).value
         current_amount = int(current_value) if current_value and current_value.isdigit() else 0
         if current_amount < amount:
-            await ctx.respond(f"Cannot remove {amount} {name} from {user_column}. Current amount is {current_amount}.")
+            await ctx.respond(f"Cannot remove {amount} {name} from {username}. Current amount is {current_amount}.")
             return
         sheet.update_cell(row, offset + user_index, current_amount - amount if current_amount - amount > 0 else "")
         if(sheet.cell(row, offset).value == "0"):
-            sheet.delete_row(row)
-            recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Amount: {amount}, Removed from: {user_column}{' (QPQ Sale)' if qpq_sale else ''}")
+            sheet.delete_rows(row)
+            recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Amount: {amount}, Removed from: {username}")
     else:
         await ctx.respond(f"Item '{name}' not found in inventory.")
         return
@@ -277,7 +286,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     if item_type == "Gear":
         parts.append(f"UVs: {uvs_to_string(uvs)}")
     parts.append(f"- Amount: {amount}")
-    parts.append(f"- Removed from: {user_column}")
+    parts.append(f"- Removed from: {username}")
     if test:
         parts.append(f"- Note: This action was performed in the test sheet.")
     msg = "\n".join(parts)
