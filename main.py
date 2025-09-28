@@ -68,8 +68,7 @@ USERNAME_DICT = {
     "QPQ": ["QPQ", 7]
 }
 UV_LEVELS = {
-    "CTR": ["Low", "Med", "High", "Very High"],
-    "ASI": ["Low", "Med", "High", "Very High"],
+    "CTR_ASI": ["Low", "Med", "High", "Very High"],
     "default": ["Low", "Med", "High", "Max"]
 }
 
@@ -89,9 +88,9 @@ async def uv_level_autocomplete(ctx: discord.AutocompleteContext):
     uv_type = ctx.options.get(uv_type_option)
 
     if uv_type in ("CTR", "ASI"):
-        return ["Low", "Medium", "High", "Very High"]
+        return UV_LEVELS["CTR_ASI"]
     else:
-        return ["Low", "Medium", "High", "Max"]
+        return UV_LEVELS["default"]
 
 async def item_name_autocomplete(ctx: discord.AutocompleteContext):
     user_input = ctx.value.lower()
