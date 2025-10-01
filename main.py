@@ -1,3 +1,4 @@
+from email.policy import default
 import os
 import asyncio
 import gspread
@@ -104,7 +105,6 @@ def get_row_number(item_type, name, uvs = None):
         if uvs is None:
             raise ValueError("UVs must be provided for Gear items.")
         else:
-
             UVs = sheet.col_values(2)
             for i, (n, uv) in enumerate(zip(names, UVs), start=1):
                 if n == name and uv == uvs_to_string(uvs):
@@ -114,6 +114,31 @@ def get_row_number(item_type, name, uvs = None):
             if n.strip() == name:
                 return i
     return None
+
+def get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
+    uvs = []
+    sheet = spreadsheet.worksheet(item_type)
+    row = None
+    offset = 2 if item_type != "Gear" else 3
+    if item_type == "Gear":
+        uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
+        for uv_type, uv_level in uv_args:
+            if uv_type and uv_level:
+                uvs.append((uv_type, uv_level))
+        row = get_row_number(item_type, name, uvs)
+    else:
+        row = get_row_number(item_type, name)
+    if row:
+        item = sheet.row_values(row)
+        names = []
+        for i in range(offset, len(item)-1):
+            if item[i] and item[i].isdigit() and int(item[i]) > 0:
+                names.append(list(USERNAME_DICT.values())[i-offset][0])
+        owners = ", ".join(names) if names else "No owners"
+        return item, owners, uvs
+    else:
+        return None, None, uvs
+
 
 def make_new_row(name, item_type, uvs, amount, price, user_index):
     offset = 2 if item_type != "Gear" else 3
@@ -153,8 +178,6 @@ def verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     if (not uv1_type and uv1_level) or (not uv2_type and uv2_level) or (not uv3_type and uv3_level):
         raise ValueError("If specifying UV levels, UV types must also be specified.")
 
-
-
 @bot.slash_command(name="additem", description="Add an item to the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def additem(
     ctx: discord.ApplicationContext,
@@ -175,15 +198,15 @@ async def additem(
         verify_username(ctx.author.name)
         verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     except ValueError as e:
-        await ctx.respond(str(e))
+        await ctx.respond(str(e), ephemeral=True)
         return
     await ctx.defer()
     try:
         await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.")
+        await ctx.followup.send("The command timed out.", ephemeral=True)
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}")
+        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner=None):
     username, user_index = get_name(ctx.author.name, owner)
     uvs = []
@@ -195,10 +218,10 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
     try:
         sheet = spreadsheet.worksheet(item_type)
     except gspread.SpreadsheetNotFound:
-        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
+        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
         return
     except gspread.WorksheetNotFound:
-        await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
+        await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
         return
     row = get_row_number(item_type, name, uvs)
     offset = 2 if item_type != "Gear" else 3
@@ -241,15 +264,15 @@ async def removeitem(
         verify_username(ctx.author.name)
         verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     except ValueError as e:
-        await ctx.respond(str(e))
+        await ctx.respond(str(e), ephemeral=True)
         return
     await ctx.defer()
     try:
         await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.")
+        await ctx.followup.send("The command timed out.", ephemeral=True)
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}")
+        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner):
     username, user_index = get_name(ctx.author.name, owner)
     uvs = []
@@ -261,10 +284,10 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     try:
         sheet = spreadsheet.worksheet(item_type)
     except gspread.SpreadsheetNotFound:
-        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
+        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
         return
     except gspread.WorksheetNotFound:
-        await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
+        await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
         return
     row = get_row_number(item_type, name, uvs)
     offset = 2 if item_type != "Gear" else 3
@@ -281,7 +304,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
             if not test:
                 recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Amount: {amount}, Removed from: {username}")
     else:
-        await ctx.respond(f"Item '{name}' not found in inventory.")
+        await ctx.respond(f"Item '{name}' not found in inventory.", ephemeral=True)
         return
     parts = [f"Removed item: {name}"]
     if item_type == "Gear":
@@ -302,7 +325,7 @@ async def switchsheet(
     try:
         await asyncio.wait_for(process_switch_sheet(ctx, sheet_name), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.")
+        await ctx.followup.send("The command timed out.", ephemeral=True)
 async def process_switch_sheet(ctx, sheet_name):
     SHEET_NAME = sheet_name
     global test, spreadsheet
@@ -317,10 +340,10 @@ async def recap(ctx: discord.ApplicationContext):
     try:
         await asyncio.wait_for(process_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.")
+        await ctx.followup.send("The command timed out.", ephemeral=True)
 async def process_recap(ctx):
     if not recent_changes:
-        await ctx.respond("No recent changes.")
+        await ctx.respond("No recent changes.", ephemeral=True)
         return
     parts = ["Recent Changes:\n"]
     for change in recent_changes:
@@ -336,12 +359,138 @@ async def clear_recap(
     try:
         await asyncio.wait_for(process_clear_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.")
+        await ctx.followup.send("The command timed out.", ephemeral=True)
 async def process_clear_recap(ctx):
     global recent_changes
     recent_changes = []
-    await ctx.respond(f"Recent changes cleared.")
+    await ctx.followup.send(f"Recent changes cleared.")
     return
+
+@bot.slash_command(name="find", description="Find an item in the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def find(
+    ctx: discord.ApplicationContext,
+    name: str =  Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
+    item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES, required=False, default=None),
+    uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
+    uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
+    uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
+    uv2_level: str = Option(description="UV2 level", required=False, autocomplete=uv_level_autocomplete),
+    uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
+    uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete)
+):
+    try:
+        verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+    except ValueError as e:
+        await ctx.respond(str(e), ephemeral=True)
+        return
+    await ctx.defer()
+    try:
+        await asyncio.wait_for(process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=60)
+    except asyncio.TimeoutError:
+        await ctx.followup.send("The command timed out.", ephemeral=True)
+    except Exception as e:
+        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+async def process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
+    if item_type is None:
+        for itype in ITEM_TYPES:
+            try:
+                item, owners, uvs = get_item(itype, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+                if item:
+                    await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' found in inventory.\n Owned by: {owners}.\n Price: {item[-1] if item[-1] else 'N/A'}", ephemeral=True)
+                    return
+                continue
+            except gspread.WorksheetNotFound:
+                continue
+        await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' not found in inventory.", ephemeral=True)
+        return
+    else:
+        try:
+            item, owners, uvs = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+            if item:
+                await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' found in inventory.\n Owned by: {owners}.\n Price: {item[-1] if item[-1] else 'N/A'}", ephemeral=True)
+                return
+            else:
+                await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' not found in inventory.", ephemeral=True)
+                return
+        except gspread.WorksheetNotFound:
+            await ctx.followup.send(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
+            return
+
+@bot.slash_command(name="addprice", description="Add or update the price of an item in the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def add_price(
+    ctx: discord.ApplicationContext,
+    name: str =  Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
+    item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES),
+    uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
+    uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
+    uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
+    uv2_level: str = Option(description="UV2 level", required=False, autocomplete=uv_level_autocomplete),
+    uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
+    uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
+    price: int = Option(description="Price of the item", required=True)
+):
+    try:
+        verify_username(ctx.author.name)
+        verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+        if price < 0:
+            raise ValueError("Price must be a non-negative integer.")
+    except ValueError as e:
+        await ctx.respond(str(e), ephemeral=True)
+        return
+    await ctx.defer()
+    try:
+        await asyncio.wait_for(process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, price), timeout=60)
+    except asyncio.TimeoutError:
+        await ctx.followup.send("The command timed out.", ephemeral=True)
+    except Exception as e:
+        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+async def process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, price):
+    offset = 2 if item_type != "Gear" else 3
+    uvs = []
+    if item_type == "Gear":
+        uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
+        for uv_type, uv_level in uv_args:
+            if uv_type and uv_level:
+                uvs.append((uv_type, uv_level))
+    try:
+        sheet = spreadsheet.worksheet(item_type)
+    except gspread.SpreadsheetNotFound:
+        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
+        return
+    except gspread.WorksheetNotFound:
+        await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
+        return
+    row = get_row_number(item_type, name, uvs)
+    if row:
+        sheet.update_cell(row, offset+8, price)
+        if not test:
+            recent_changes.append(f"Updated price for item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, New Price: {price}")
+    else:
+        await ctx.respond(f"Item '{name}' not found in inventory.", ephemeral=True)
+        return
+    parts = [f"Updated price for item: {name}"]
+    if item_type == "Gear":
+        parts.append(f"UVs: {uvs_to_string(uvs)}")
+    parts.append(f"- New Price: {price}")
+    if test:
+        parts.append(f"- Note: This action was performed in the test sheet.")
+    msg = "\n".join(parts)
+    await ctx.respond(msg)
+
+@bot.slash_command(name="help", description="Get help about the bot commands", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def help_command(ctx: discord.ApplicationContext):
+    help_text = (
+        "Available Commands:\n"
+        "/additem - Add an item to the sheet inventory.\n"
+        "/removeitem - Remove an item from the sheet inventory.\n"
+        "/switchsheet - Switch to a different sheet.\n"
+        "/recap - Get a recap of all new or removed items.\n"
+        "/clearrecap - Clear all items in the recap.\n"
+        "/find - Find an item in the sheet inventory.\n"
+        "/addprice - Add or update the price of an item in the sheet inventory.\n"
+        "/help - Get help about the bot commands."
+    )
+    await ctx.respond(help_text, ephemeral=True)
 
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
