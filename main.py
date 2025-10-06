@@ -229,7 +229,7 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
     if row:
         current_value = sheet.cell(row, user_col).value
         current_amount = int(current_value) if current_value and current_value.isdigit() else 0
-        sheet.update_cell(row, offset + user_index, current_amount + amount)
+        sheet.update_cell(row, offset + user_index, current_amount + int(amount))
     else:
         sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index), value_input_option="USER_ENTERED")
         if not test:
@@ -421,13 +421,13 @@ async def add_price(
     ctx: discord.ApplicationContext,
     name: str =  Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
     item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES),
+    price: int = Option(description="Price of the item", required=True),
     uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
     uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
     uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
     uv2_level: str = Option(description="UV2 level", required=False, autocomplete=uv_level_autocomplete),
     uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
-    uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
-    price: int = Option(description="Price of the item", required=True)
+    uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete)
 ):
     try:
         verify_username(ctx.author.name)
