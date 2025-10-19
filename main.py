@@ -257,7 +257,8 @@ async def removeitem(
     uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
     uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
     amount: int = Option(default=1, description="Amount of items", required=False),
-    owner: str = Option(default=None, description="Specify a different user to add the item to", required=False, choices=list(map(lambda x: x[0], USERNAME_DICT.values())))
+    owner: str = Option(default=None, description="Specify a different user to add the item to", required=False, choices=list(map(lambda x: x[0], USERNAME_DICT.values()))),
+    price: str = Option(default=None, description="Final sale price", required=False)
 ):
     try:
         verify_amount(str(amount))
@@ -268,12 +269,12 @@ async def removeitem(
         return
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner), timeout=60)
+        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner, price), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.", ephemeral=True)
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
-async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner):
+async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner, price=None):
     username, user_index = get_name(ctx.author.name, owner)
     uvs = []
     if item_type == "Gear":
@@ -302,7 +303,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
         if(sheet.cell(row, offset).value == "0"):
             sheet.delete_rows(row)
             if not test:
-                recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Amount: {amount}, Removed from: {username}")
+                recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Removed from: {username}")
     else:
         await ctx.respond(f"Item '{name}' not found in inventory.", ephemeral=True)
         return
@@ -313,6 +314,8 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     parts.append(f"- Removed from: {username}")
     if test:
         parts.append(f"- Note: This action was performed in the test sheet.")
+    if price:
+        parts.append(f"- Final sale price: {price}")
     msg = "\n".join(parts)
     await ctx.respond(msg)
 
