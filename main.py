@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import requests
 import threading
 import time
-import bisect
+import pandas as pd
 
 # --- Environment Setup ---
 load_dotenv()
@@ -37,6 +37,10 @@ intents.messages = True
 bot = commands.Bot(intents=intents)
 spreadsheet = client_gs.open(SHEET_NAME)
 app = FastAPI()
+
+# --- global variables ---
+CACHE_TTL = 300 # 5 minutes
+sheet_cache = {}
 
 @app.get("/")
 async def root():
@@ -105,15 +109,48 @@ async def item_name_autocomplete(ctx: discord.AutocompleteContext):
             if len(results) >= 25:
                 break
     return results
- 
+
+def get_sheet(name):
+    now = time.time()
+
+    # If cached and fresh — return it
+    if name in sheet_cache:
+        entry = sheet_cache[name]
+        if now - entry["timestamp"] < CACHE_TTL:
+            return entry["data"]
+
+        # Cache expired → remove it
+        del sheet_cache[name]
+    # Load fresh data from Google Sheets
+    data = load_sheet_from_google(name)
+    # Save to cache
+    sheet_cache[name] = {
+        "data": data,
+        "timestamp": now
+    }
+    return data
+
+def load_sheet_from_google(sheet_name):
+    worksheet = spreadsheet.worksheet(sheet_name)
+    values = worksheet.get_all_values()
+
+    if not values:
+        return pd.DataFrame()  # empty
+
+    header = values[0]
+    rows = values[1:]
+
+    df = pd.DataFrame(rows, columns=header)
+    return df
+
 def get_row_number(item_type, name, uvs = None):
-    sheet = spreadsheet.worksheet(item_type)
-    names = sheet.col_values(1)
+    sheet = get_sheet(item_type)
+    names = sheet["Item"]
     if item_type == "Gear":
         if uvs is None:
             raise ValueError("UVs must be provided for Gear items.")
         else:
-            UVs = sheet.col_values(2)
+            UVs = sheet["UV"]
             for i, (n, uv) in enumerate(zip(names, UVs), start=1):
                 if (name in n) and uv == uvs_to_string(uvs):
                     return i
@@ -125,31 +162,22 @@ def get_row_number(item_type, name, uvs = None):
 
 def get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     uvs = []
-    sheet = spreadsheet.worksheet(item_type)
-    row = None
+    sheet = get_sheet(item_type)
+    item = None
     offset = 2 if item_type != "Gear" else 3
     if item_type == "Gear":
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
         for uv_type, uv_level in uv_args:
             if uv_type and uv_level:
                 uvs.append((uv_type, uv_level))
-        row = get_row_number(item_type, name, uvs)
+        item = sheet[(sheet["Item"].str.contains(name)) & (sheet["UV"] == uvs_to_string(uvs))]
     else:
-        row = get_row_number(item_type, name)
-    if row:
-        item = sheet.row_values(row)
-        names = []
-        for i in range(offset, len(item)-1):
-            if item[i] and item[i].isdigit() and int(item[i]) > 0:
-                names.append(list(USERNAME_DICT.values())[i-offset][0])
-        owners = ", ".join(names) if names else "No owners"
-        return item, owners, uvs
-    else:
-        return None, None, uvs
+        item = sheet[sheet["Item"].str.contains(name)]
+    return item
 
 def make_new_row(name, item_type, uvs, amount, price, user_index):
     offset = 2 if item_type != "Gear" else 3
-    sheet = spreadsheet.worksheet(item_type)
+    sheet = get_sheet(item_type)
     user_col = offset-1 + user_index
     num_users = 7
     row = ["" for _ in range(offset + num_users + 1)]
@@ -158,7 +186,7 @@ def make_new_row(name, item_type, uvs, amount, price, user_index):
         row[1] = str(uvs) if uvs!=[] else "clean"
     row[user_col] = amount
     row[-1] = price if price else ""
-    next_row = len(sheet.get_all_values()) + 1
+    next_row = len(sheet) + 2
     first_col = chr(ord("A") + offset)
     last_col = chr(ord("A") + offset + num_users - 1)
     row[offset-1] = f"=SUM({first_col}{next_row}:{last_col}{next_row})"
@@ -182,8 +210,34 @@ def verify_username(username):
         raise ValueError(f"Unknown username: {username}")
 
 def verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
-    if (not uv1_type and uv1_level) or (not uv2_type and uv2_level) or (not uv3_type and uv3_level):
+    if (not uv1_type and uv1_level) or (uv1_type and not uv1_level) or (not uv2_type and uv2_level) or (uv2_type and not uv2_level) or (not uv3_type and uv3_level) or (uv3_type and not uv3_level):
         raise ValueError("If specifying UV levels, UV types must also be specified.")
+
+def search(item_type, name,uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
+    sheet = get_sheet(item_type)
+    names = sheet["Item"]
+    results = []
+    uvs = []
+    offset = 2
+    if item_type == "Gear":
+        uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
+        for uv_type, uv_level in uv_args:
+            if uv_type and uv_level:
+                uvs.append((uv_type, uv_level))
+    for i, n in enumerate(names, start=1):
+        if name.lower() in n.lower():
+            item = sheet.row_values(i)
+            if item_type == "Gear":
+                if uvs and (item[1] != uvs_to_string(uvs)):
+                    continue
+                item[0] += f" {item[1]}"
+                item.pop(1)
+            owners = []
+            for j in range(offset, min(len(item), 9)):
+                if item[j]:
+                    owners.append(list(USERNAME_DICT.values())[j-offset][0])
+            results.append((item, owners))
+    return results
 
 @bot.slash_command(name="additem", description="Add an item to the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def additem(
@@ -230,15 +284,19 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
     except gspread.WorksheetNotFound:
         await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
         return
-    row = get_row_number(item_type, name, uvs)
+    row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     offset = 2 if item_type != "Gear" else 3
-    user_col = offset + user_index
-    if row:
-        current_value = sheet.cell(row, user_col).value
+    if not row.empty:
+        current_value = row[username].values[0]
         current_amount = int(current_value) if current_value and current_value.isdigit() else 0
-        sheet.update_cell(row, offset + user_index, current_amount + int(amount))
+        sheet.update_cell(int(row.index[0]+2), offset + user_index, current_amount + int(amount))
+        cached_sheet = get_sheet(item_type)
+        cached_sheet.at[int(row.index[0]), username] = str(current_amount + int(amount))
     else:
         sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index), value_input_option="USER_ENTERED")
+        cached_sheet = get_sheet(item_type)
+        new_row = make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index)
+        cached_sheet.loc[len(cached_sheet)] = new_row
         if not test:
             recent_changes.append(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {username}")
     parts = [f"Added item: {name}"]
@@ -297,18 +355,20 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     except gspread.WorksheetNotFound:
         await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
         return
-    row = get_row_number(item_type, name, uvs)
+    row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     offset = 2 if item_type != "Gear" else 3
-    user_col = offset + user_index
-    if row:
-        current_value = sheet.cell(row, user_col).value
+    if not row.empty:
+        current_value = row[username].values[0]
         current_amount = int(current_value) if current_value and current_value.isdigit() else 0
         if current_amount < amount:
             await ctx.respond(f"Cannot remove {amount} {name} from {username}. Current amount is {current_amount}.")
             return
-        sheet.update_cell(row, offset + user_index, current_amount - amount if current_amount - amount > 0 else "")
-        if(sheet.cell(row, offset).value == "0"):
-            sheet.delete_rows(row)
+        sheet.update_cell(int(row.index[0])+2, offset + user_index, current_amount - amount if current_amount - amount > 0 else "")
+        cached_sheet = get_sheet(item_type)
+        cached_sheet.at[int(row.index[0]), username] = str(current_amount - amount) if current_amount - amount > 0 else ""
+        if(int(row["Quantity"].values[0]) - amount == 0):
+            sheet.delete_rows(int(row.index[0])+2)
+            cached_sheet.drop(index=int(row.index[0]), inplace=True)
             if not test:
                 recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Removed from: {username}")
     else:
@@ -386,13 +446,8 @@ async def find(
     uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
     uv2_level: str = Option(description="UV2 level", required=False, autocomplete=uv_level_autocomplete),
     uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
-    uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete)
+    uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
 ):
-    try:
-        verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
-    except ValueError as e:
-        await ctx.respond(str(e), ephemeral=True)
-        return
     await ctx.defer()
     try:
         await asyncio.wait_for(process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=60)
@@ -402,25 +457,47 @@ async def find(
         await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 async def process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     if item_type is None:
+        parts = [f"Search results for {name}:"]
         for itype in ITEM_TYPES:
             try:
-                item, owners, uvs = get_item(itype, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
-                if item:
-                    await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' found in inventory.\n Owned by: {owners}.\n Price: {item[-1] if item[-1] else 'N/A'}", ephemeral=True)
-                    return
-                continue
+                results = search(itype, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+                if results:
+                    for (item, owners) in results:
+                        item_found = [f"{item[0]},"]
+                        item_found.append("owned by:")
+                        for owner in owners:
+                            item_found.append(f"{owner},")
+                        item_found.append(f"Price: {item[9] if len(item) == 10 else 'N/A'}")
+                        parts.append(" ".join(item_found))
             except gspread.WorksheetNotFound:
                 continue
-        await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' not found in inventory.", ephemeral=True)
+        if len(parts) == 1:
+            await ctx.followup.send(f"No results found for {name} in inventory.", ephemeral=True)
+            return
+        if test:
+            parts.append(f"- Note: This action was performed in the test sheet.")
+        msg = "\n".join(parts)
+        await ctx.followup.send(msg, ephemeral=True)
         return
     else:
         try:
-            item, owners, uvs = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
-            if item:
-                await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' found in inventory.\n Owned by: {owners}.\n Price: {item[-1] if item[-1] else 'N/A'}", ephemeral=True)
+            results = search(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+            if results:
+                parts = [f"Search results for {name}:"]
+                for (item, owners) in results:
+                    item_found = [f"{item[0]},"]
+                    item_found.append("owned by:")
+                    for owner in owners:
+                        item_found.append(f"{owner},")
+                    item_found.append(f"Price: {item[9] if len(item) == 10 else 'N/A'}")
+                    parts.append(" ".join(item_found))
+                if test:
+                    parts.append(f"- Note: This action was performed in the test sheet.")
+                msg = "\n".join(parts)
+                await ctx.followup.send(msg, ephemeral=True)
                 return
             else:
-                await ctx.followup.send(f"Item '{name} {uvs_to_string(uvs) if uvs else ''}' not found in inventory.", ephemeral=True)
+                await ctx.followup.send(f"No results found for {name} in inventory.", ephemeral=True)
                 return
         except gspread.WorksheetNotFound:
             await ctx.followup.send(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
@@ -514,7 +591,17 @@ def self_ping():
             print("Ping failed:", e)
         time.sleep(600)  # every 10 minutes
 
+def check_sheet_cache():
+    while True:
+        time.sleep(300)  # every 5 minutes
+        for name in list(sheet_cache.keys()):
+            entry = sheet_cache[name]
+            now = time.time()
+            if now - entry["timestamp"] >= CACHE_TTL:
+                del sheet_cache[name]
+
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     threading.Thread(target=self_ping, daemon=True).start()
+    threading.Thread(target=check_sheet_cache, daemon=True).start()
     bot.run(DISCORD_TOKEN)
