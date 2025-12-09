@@ -12,6 +12,7 @@ import requests
 import threading
 import time
 import pandas as pd
+import re
 
 # --- Environment Setup ---
 load_dotenv()
@@ -164,7 +165,6 @@ def get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type
     uvs = []
     sheet = get_sheet(item_type)
     item = None
-    offset = 2 if item_type != "Gear" else 3
     if item_type == "Gear":
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
         for uv_type, uv_level in uv_args:
@@ -213,30 +213,31 @@ def verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     if (not uv1_type and uv1_level) or (uv1_type and not uv1_level) or (not uv2_type and uv2_level) or (uv2_type and not uv2_level) or (not uv3_type and uv3_level) or (uv3_type and not uv3_level):
         raise ValueError("If specifying UV levels, UV types must also be specified.")
 
-def search(item_type, name,uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
+def get_price(price):
+    item_price = re.search(r'\d+', price)
+    if item_price:
+        return int(item_price.group())
+    return -1
+
+def search_item(item_type, name,uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     sheet = get_sheet(item_type)
-    names = sheet["Item"]
     results = []
     uvs = []
-    offset = 2
     if item_type == "Gear":
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
         for uv_type, uv_level in uv_args:
             if uv_type and uv_level:
                 uvs.append((uv_type, uv_level))
-    for i, n in enumerate(names, start=1):
-        if name.lower() in n.lower():
-            item = sheet.row_values(i)
-            if item_type == "Gear":
-                if uvs and (item[1] != uvs_to_string(uvs)):
-                    continue
-                item[0] += f" {item[1]}"
-                item.pop(1)
-            owners = []
-            for j in range(offset, min(len(item), 9)):
-                if item[j]:
-                    owners.append(list(USERNAME_DICT.values())[j-offset][0])
-            results.append((item, owners))
+    filtered = sheet[sheet["Item"].str.contains(name, case=False)]
+    for i, row in filtered.iterrows():
+        if item_type == "Gear":
+            if uvs and (row["UV"] != uvs_to_string(uvs)):
+                continue
+        owners = []
+        for name in USERNAME_DICT.values():
+            if row[name[0]]:
+                owners.append(name[0])
+        results.append((row, owners))
     return results
 
 @bot.slash_command(name="additem", description="Add an item to the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
@@ -258,6 +259,10 @@ async def additem(
         verify_amount(str(amount))
         verify_username(ctx.author.name)
         verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+        if price:
+            item_price = get_price(price)
+            if item_price < 0:
+                raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
         await ctx.respond(str(e), ephemeral=True)
         return
@@ -329,6 +334,10 @@ async def removeitem(
         verify_amount(str(amount))
         verify_username(ctx.author.name)
         verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+        if price:
+            item_price = get_price(price)
+            if item_price < 0:
+                raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
         await ctx.respond(str(e), ephemeral=True)
         return
@@ -436,8 +445,8 @@ async def process_clear_recap(ctx):
     await ctx.followup.send(f"Recent changes cleared.")
     return
 
-@bot.slash_command(name="find", description="Find an item in the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
-async def find(
+@bot.slash_command(name="search", description="Search an item or by keyword in the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
+async def search(
     ctx: discord.ApplicationContext,
     name: str =  Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
     item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES, required=False, default=None),
@@ -450,24 +459,24 @@ async def find(
 ):
     await ctx.defer()
     try:
-        await asyncio.wait_for(process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=60)
+        await asyncio.wait_for(process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=60)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.", ephemeral=True)
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
-async def process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
+async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     if item_type is None:
         parts = [f"Search results for {name}:"]
         for itype in ITEM_TYPES:
             try:
-                results = search(itype, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+                results = search_item(itype, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
                 if results:
                     for (item, owners) in results:
-                        item_found = [f"{item[0]},"]
+                        item_found = [f"{item['Item']},{'' if itype != 'Gear' else ' ' + item['UV']}"]
                         item_found.append("owned by:")
                         for owner in owners:
                             item_found.append(f"{owner},")
-                        item_found.append(f"Price: {item[9] if len(item) == 10 else 'N/A'}")
+                        item_found.append(f"Price: {item['Price'] if item['Price'] else 'N/A'}")
                         parts.append(" ".join(item_found))
             except gspread.WorksheetNotFound:
                 continue
@@ -481,15 +490,15 @@ async def process_find(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_
         return
     else:
         try:
-            results = search(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+            results = search_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
             if results:
                 parts = [f"Search results for {name}:"]
                 for (item, owners) in results:
-                    item_found = [f"{item[0]},"]
+                    item_found = [f"{item['Item']},{'' if itype != 'Gear' else ' ' + item['UV']}"]
                     item_found.append("owned by:")
                     for owner in owners:
                         item_found.append(f"{owner},")
-                    item_found.append(f"Price: {item[9] if len(item) == 10 else 'N/A'}")
+                    item_found.append(f"Price: {item['Price'] if item['Price'] else 'N/A'}")
                     parts.append(" ".join(item_found))
                 if test:
                     parts.append(f"- Note: This action was performed in the test sheet.")
@@ -519,7 +528,8 @@ async def add_price(
     try:
         verify_username(ctx.author.name)
         verify_uvs(uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
-        if price < 0:
+        item_price = get_price(price)
+        if item_price < 0:
             raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
         await ctx.respond(str(e), ephemeral=True)
@@ -540,16 +550,18 @@ async def process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type,
             if uv_type and uv_level:
                 uvs.append((uv_type, uv_level))
     try:
-        sheet = spreadsheet.worksheet(item_type)
+        sheet = get_sheet(item_type)
     except gspread.SpreadsheetNotFound:
         await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
         return
     except gspread.WorksheetNotFound:
         await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
         return
-    row = get_row_number(item_type, name, uvs)
-    if row:
-        sheet.update_cell(row, offset+8, price)
+    row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
+    if not row.empty:
+        sheet.loc[row.index[0], "Price"] = str(price)
+        google_sheet = spreadsheet.worksheet(item_type)
+        google_sheet.update_cell(int(row.index[0]+2), offset+8, price)
         if not test:
             recent_changes.append(f"Updated price for item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, New Price: {price}")
     else:
@@ -573,7 +585,7 @@ async def help_command(ctx: discord.ApplicationContext):
         "/switchsheet - Switch to a different sheet.\n"
         "/recap - Get a recap of all new or removed items.\n"
         "/clearrecap - Clear all items in the recap.\n"
-        "/find - Find an item in the sheet inventory.\n"
+        "/search - Search an item or by keyword in the sheet inventory.\n"
         "/addprice - Add or update the price of an item in the sheet inventory.\n"
         "/help - Get help about the bot commands."
     )
