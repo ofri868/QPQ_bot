@@ -19,9 +19,12 @@ import json
 # --- Environment Setup ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+print(len(DISCORD_TOKEN))
 SHEET_NAME = "Quid Pro Quo Merch Sheet"
 SERVER_ID = int(os.getenv("SERVER_ID"))
+print(f"SERVER_ID: {SERVER_ID}")
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
+print(f"TEST_SERVER_ID: {TEST_SERVER_ID}")
 test = SHEET_NAME == "QPQ test sheet"
 recent_changes = []
 
@@ -31,9 +34,10 @@ scope = ["https://spreadsheets.google.com/feeds",
          "https://www.googleapis.com/auth/drive.file",
          "https://www.googleapis.com/auth/drive"]
 
-# creds = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
-creds_dict = json.loads(os.getenv("GOOGLE_CREDS_JSON"))
-creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+# creds_dict = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
+# creds_dict = json.loads(os.getenv("GOOGLE_CREDS_JSON"))
+
+creds = Credentials.from_service_account_info("/home/ubuntu/QPQ_bot/arched-elixir-471411-e0-0a32c7ac4698.json", scopes=scope)
 client_gs = gspread.authorize(creds)
 
 # --- Discord Bot Setup ---
@@ -593,16 +597,6 @@ async def help_command(ctx: discord.ApplicationContext):
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
-def self_ping():
-    url = "https://qpq-bot.onrender.com/"
-    while True:
-        try:
-            requests.head(url)
-        except Exception as e:
-            print("Ping failed:", e)
-        time.sleep(600)  # every 10 minutes
-
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
-    threading.Thread(target=self_ping, daemon=True).start()
     bot.run(DISCORD_TOKEN)
