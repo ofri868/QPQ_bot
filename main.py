@@ -19,7 +19,6 @@ import json
 # --- Environment Setup ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-print(len(DISCORD_TOKEN))
 SHEET_NAME = "Quid Pro Quo Merch Sheet"
 SERVER_ID = 1338909418749956212 # int(os.getenv("SERVER_ID"))
 TEST_SERVER_ID = 1414309369255956573 # int(os.getenv("TEST_SERVER_ID"))
@@ -34,7 +33,7 @@ scope = ["https://spreadsheets.google.com/feeds",
 
 # creds = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
 creds_dict = json.loads(os.getenv("GOOGLE_CREDS_JSON"))
-creds = Credentials.from_service_account_info(creds_dict)
+creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
 client_gs = gspread.authorize(creds)
 
 # --- Discord Bot Setup ---
