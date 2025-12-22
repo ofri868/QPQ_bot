@@ -6,6 +6,7 @@ from discord.ext import commands
 from discord.commands import Option
 from fastapi import FastAPI
 import uvicorn
+from google.oauth2.service_account import Credentials
 from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
 import requests
@@ -13,6 +14,7 @@ import threading
 import time
 import pandas as pd
 import re
+import json
 
 # --- Environment Setup ---
 load_dotenv()
@@ -30,7 +32,9 @@ scope = ["https://spreadsheets.google.com/feeds",
          "https://www.googleapis.com/auth/drive.file",
          "https://www.googleapis.com/auth/drive"]
 
-creds = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
+# creds = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
+creds_dict = json.loads(os.getenv("GOOGLE_CREDS_JSON"))
+creds = Credentials.from_service_account_info(creds_dict)
 client_gs = gspread.authorize(creds)
 
 # --- Discord Bot Setup ---
