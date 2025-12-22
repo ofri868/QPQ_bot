@@ -17,6 +17,7 @@ import re
 # --- Environment Setup ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+print(len(DISCORD_TOKEN))
 SHEET_NAME = "Quid Pro Quo Merch Sheet"
 SERVER_ID = 1338909418749956212 # int(os.getenv("SERVER_ID"))
 TEST_SERVER_ID = 1414309369255956573 # int(os.getenv("TEST_SERVER_ID"))
