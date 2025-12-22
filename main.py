@@ -37,7 +37,7 @@ scope = ["https://spreadsheets.google.com/feeds",
 # creds_dict = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
 # creds_dict = json.loads(os.getenv("GOOGLE_CREDS_JSON"))
 
-creds = Credentials.from_service_account_info("/home/ubuntu/QPQ_bot/arched-elixir-471411-e0-0a32c7ac4698.json", scopes=scope)
+creds = Credentials.from_service_account_file("/home/ubuntu/QPQ_bot/arched-elixir-471411-e0-0a32c7ac4698.json", scopes=scope)
 client_gs = gspread.authorize(creds)
 
 # --- Discord Bot Setup ---
