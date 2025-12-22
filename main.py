@@ -44,7 +44,6 @@ spreadsheet = client_gs.open(SHEET_NAME)
 app = FastAPI()
 
 # --- global variables ---
-CACHE_TTL = 300 # 5 minutes
 sheet_cache = {}
 
 @app.get("/")
@@ -118,14 +117,10 @@ async def item_name_autocomplete(ctx: discord.AutocompleteContext):
 def get_sheet(name):
     now = time.time()
 
-    # If cached and fresh — return it
+    # If cached — return it
     if name in sheet_cache:
         entry = sheet_cache[name]
-        if now - entry["timestamp"] < CACHE_TTL:
-            return entry["data"]
-
-        # Cache expired → remove it
-        del sheet_cache[name]
+        return entry["data"]
     # Load fresh data from Google Sheets
     data = load_sheet_from_google(name)
     # Save to cache
@@ -607,17 +602,7 @@ def self_ping():
             print("Ping failed:", e)
         time.sleep(600)  # every 10 minutes
 
-def check_sheet_cache():
-    while True:
-        time.sleep(300)  # every 5 minutes
-        for name in list(sheet_cache.keys()):
-            entry = sheet_cache[name]
-            now = time.time()
-            if now - entry["timestamp"] >= CACHE_TTL:
-                del sheet_cache[name]
-
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     threading.Thread(target=self_ping, daemon=True).start()
-    threading.Thread(target=check_sheet_cache, daemon=True).start()
     bot.run(DISCORD_TOKEN)
