@@ -8,7 +8,9 @@ venv/
 
 # Secrets
 *.env
+*.key
 arched-elixir-471411-e0-0a32c7ac4698.json
+notes.txt
 
 # VSCode
 .vscode/
