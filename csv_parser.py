@@ -7,4 +7,5 @@ with open('items.txt', 'x', encoding='utf-8') as f:
     f.write("[")
     for item in sorted(ITEM_LIST):
         f.write(f"\"{item}\",")
+    f.seek(f.tell() - 1)  # Move the file pointer back to overwrite the last comma
     f.write("]")
