@@ -19,12 +19,9 @@ import json
 # --- Environment Setup ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-print(len(DISCORD_TOKEN))
 SHEET_NAME = "Quid Pro Quo Merch Sheet"
 SERVER_ID = int(os.getenv("SERVER_ID"))
-print(f"SERVER_ID: {SERVER_ID}")
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
-print(f"TEST_SERVER_ID: {TEST_SERVER_ID}")
 test = SHEET_NAME == "QPQ test sheet"
 recent_changes = []
 
@@ -37,7 +34,8 @@ scope = ["https://spreadsheets.google.com/feeds",
 # creds_dict = ServiceAccountCredentials.from_json_keyfile_name("arched-elixir-471411-e0-0a32c7ac4698.json", scope)
 # creds_dict = json.loads(os.getenv("GOOGLE_CREDS_JSON"))
 
-creds = Credentials.from_service_account_file("/home/ubuntu/QPQ_bot/arched-elixir-471411-e0-0a32c7ac4698.json", scopes=scope)
+creds = Credentials.from_service_account_file("arched-elixir-471411-e0-0a32c7ac4698.json", scopes=scope)
+# creds = Credentials.from_service_account_file("/home/ubuntu/QPQ_bot/arched-elixir-471411-e0-0a32c7ac4698.json", scopes=scope)
 client_gs = gspread.authorize(creds)
 
 # --- Discord Bot Setup ---
@@ -267,15 +265,15 @@ async def additem(
             if item_price < 0:
                 raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
-        await ctx.respond(str(e), ephemeral=True)
+        await ctx.respond(str(e))
         return
-    await ctx.defer()
+    await ctx.defer(ephemeral=False)
     try:
         await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        await ctx.followup.send(f"An error occurred: {str(e)}")
 async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner=None):
     username, user_index = get_name(ctx.author.name, owner)
     uvs = []
@@ -287,16 +285,16 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
     try:
         sheet = spreadsheet.worksheet(item_type)
     except gspread.SpreadsheetNotFound:
-        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
+        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
         return
     except gspread.WorksheetNotFound:
-        await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
+        await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
         return
     row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     offset = 2 if item_type != "Gear" else 3
     if not row.empty:
         current_value = row[username].values[0]
-        current_amount = int(current_value) if current_value and current_value.isdigit() else 0
+        current_amount = int(current_value) if current_value  else 0
         sheet.update_cell(int(row.index[0]+2), offset + user_index, current_amount + int(amount))
         cached_sheet = get_sheet(item_type)
         cached_sheet.at[int(row.index[0]), username] = str(current_amount + int(amount))
@@ -316,7 +314,8 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
     if test:
         parts.append(f"- Note: This action was performed in the test sheet.")
     msg = "\n".join(parts)
-    await ctx.respond(msg)
+    await ctx.delete_initial_response()
+    await ctx.channel.send(msg, ephemeral = False)
 
 @bot.slash_command(name="removeitem", description="Remove an item from the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def removeitem(
@@ -342,15 +341,15 @@ async def removeitem(
             if item_price < 0:
                 raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
-        await ctx.respond(str(e), ephemeral=True)
+        await ctx.respond(str(e))
         return
-    await ctx.defer()
+    await ctx.defer(ephemeral = False)
     try:
         await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner, price), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        await ctx.followup.send(f"An error occurred: {str(e)}")
 async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner, price=None):
     username, user_index = get_name(ctx.author.name, owner)
     uvs = []
@@ -362,16 +361,16 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     try:
         sheet = spreadsheet.worksheet(item_type)
     except gspread.SpreadsheetNotFound:
-        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
+        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
         return
     except gspread.WorksheetNotFound:
-        await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
+        await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
         return
     row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     offset = 2 if item_type != "Gear" else 3
     if not row.empty:
         current_value = row[username].values[0]
-        current_amount = int(current_value) if current_value and current_value.isdigit() else 0
+        current_amount = int(current_value) if current_value else 0
         if current_amount < amount:
             await ctx.respond(f"Cannot remove {amount} {name} from {username}. Current amount is {current_amount}.")
             return
@@ -384,7 +383,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
             if not test:
                 recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Removed from: {username}")
     else:
-        await ctx.respond(f"Item '{name}' not found in inventory.", ephemeral=True)
+        await ctx.respond(f"Item '{name}' not found in inventory.")
         return
     parts = [f"Removed item: {name}"]
     if item_type == "Gear":
@@ -403,11 +402,11 @@ async def switchsheet(
     ctx: discord.ApplicationContext,
     sheet_name: str = Option(description="Name of the new sheet", required=True, choices=["QPQ test sheet", "Quid Pro Quo Merch Sheet"])
 ):
-    await ctx.defer()
+    await ctx.defer(ephemeral = True)
     try:
         await asyncio.wait_for(process_switch_sheet(ctx, sheet_name), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
 async def process_switch_sheet(ctx, sheet_name):
     SHEET_NAME = sheet_name
     global test, spreadsheet
@@ -418,14 +417,14 @@ async def process_switch_sheet(ctx, sheet_name):
 
 @bot.slash_command(name="recap", description="Get a recap of all new or removed items", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def recap(ctx: discord.ApplicationContext):
-    await ctx.defer()
+    await ctx.defer(ephemeral = True)
     try:
         await asyncio.wait_for(process_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
 async def process_recap(ctx):
     if not recent_changes:
-        await ctx.respond("No recent changes.", ephemeral=True)
+        await ctx.respond("No recent changes.")
         return
     parts = ["Recent Changes:\n"]
     for change in recent_changes:
@@ -437,11 +436,11 @@ async def process_recap(ctx):
 async def clear_recap(
     ctx: discord.ApplicationContext
 ):
-    await ctx.defer()
+    await ctx.defer(ephemeral = True)
     try:
         await asyncio.wait_for(process_clear_recap(ctx), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
 async def process_clear_recap(ctx):
     global recent_changes
     recent_changes = []
@@ -460,13 +459,13 @@ async def search(
     uv3_type: str = Option(description="UV3 type", choices=UV_TYPES, required=False),
     uv3_level: str = Option(description="UV3 level", required=False, autocomplete=uv_level_autocomplete),
 ):
-    await ctx.defer()
+    await ctx.defer(ephemeral = True)
     try:
         await asyncio.wait_for(process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        await ctx.followup.send(f"An error occurred: {str(e)}")
 async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level):
     if item_type is None:
         parts = [f"Search results for {name}:"]
@@ -484,12 +483,12 @@ async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv
             except gspread.WorksheetNotFound:
                 continue
         if len(parts) == 1:
-            await ctx.followup.send(f"No results found for {name} in inventory.", ephemeral=True)
+            await ctx.followup.send(f"No results found for {name} in inventory.")
             return
         if test:
             parts.append(f"- Note: This action was performed in the test sheet.")
         msg = "\n".join(parts)
-        await ctx.followup.send(msg, ephemeral=True)
+        await ctx.followup.send(msg)
         return
     else:
         try:
@@ -506,13 +505,13 @@ async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv
                 if test:
                     parts.append(f"- Note: This action was performed in the test sheet.")
                 msg = "\n".join(parts)
-                await ctx.followup.send(msg, ephemeral=True)
+                await ctx.followup.send(msg)
                 return
             else:
-                await ctx.followup.send(f"No results found for {name} in inventory.", ephemeral=True)
+                await ctx.followup.send(f"No results found for {name} in inventory.")
                 return
         except gspread.WorksheetNotFound:
-            await ctx.followup.send(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
+            await ctx.followup.send(f"Worksheet for item type '{item_type}' not found.")
             return
 
 @bot.slash_command(name="addprice", description="Add or update the price of an item in the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
@@ -535,15 +534,15 @@ async def add_price(
         if item_price < 0:
             raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
-        await ctx.respond(str(e), ephemeral=True)
+        await ctx.respond(str(e))
         return
-    await ctx.defer()
+    await ctx.defer(ephemeral = True)
     try:
         await asyncio.wait_for(process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, price), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.", ephemeral=True)
+        await ctx.followup.send("The command timed out.")
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
+        await ctx.followup.send(f"An error occurred: {str(e)}")
 async def process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, price):
     offset = 2 if item_type != "Gear" else 3
     uvs = []
@@ -555,10 +554,10 @@ async def process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type,
     try:
         sheet = get_sheet(item_type)
     except gspread.SpreadsheetNotFound:
-        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.", ephemeral=True)
+        await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
         return
     except gspread.WorksheetNotFound:
-        await ctx.respond(f"Worksheet for item type '{item_type}' not found.", ephemeral=True)
+        await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
         return
     row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     if not row.empty:
@@ -568,7 +567,7 @@ async def process_add_price(ctx, name, item_type, uv1_type, uv1_level, uv2_type,
         if not test:
             recent_changes.append(f"Updated price for item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, New Price: {price}")
     else:
-        await ctx.respond(f"Item '{name}' not found in inventory.", ephemeral=True)
+        await ctx.respond(f"Item '{name}' not found in inventory.")
         return
     parts = [f"Updated price for item: {name}"]
     if item_type == "Gear":
@@ -592,11 +591,19 @@ async def help_command(ctx: discord.ApplicationContext):
         "/addprice - Add or update the price of an item in the sheet inventory.\n"
         "/help - Get help about the bot commands."
     )
-    await ctx.respond(help_text, ephemeral=True)
+    await ctx.respond(help_text)
 
 def run_web():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
 
+def refresh_cache():
+    while True:
+        time.sleep(3600)  # Sleep for 1 hour
+        sheet_cache.clear()
+        for item_type in ITEM_TYPES:
+            load_sheet_from_google(item_type)
+
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
+    threading.Thread(target=refresh_cache).start()
     bot.run(DISCORD_TOKEN)
