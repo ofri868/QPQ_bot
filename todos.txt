@@ -1,0 +1,5 @@
+1. cap responses to 2000 characters and send a follow-up message
+2. make csv_parser a function that creates the list as a variable
+3. make all responses ephemeral and send a log message in sale-logs if neccessary
+4. add file to backup the recent changes
+5. fix 'ApplicationContext' object has no attribute 'delete_initial_response'

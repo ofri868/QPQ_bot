@@ -272,6 +272,7 @@ async def additem(
     await ctx.defer(ephemeral=False)
     try:
         await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
+        
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
