@@ -135,7 +135,8 @@ def get_sheet(name):
 
 def load_sheet_from_google(sheet_name):
     worksheet = spreadsheet.worksheet(sheet_name)
-    values = worksheet.get("A:K")
+    last_col = chr(ord("A") + len(USERNAME_DICT) + (3 if sheet_name == "Gear" else 2))
+    values = worksheet.get(f"A:{last_col}")
 
     if not values:
         return pd.DataFrame()  # empty
@@ -230,7 +231,7 @@ def search_item(item_type, name,uv1_type, uv1_level, uv2_type, uv2_level, uv3_ty
         for uv_type, uv_level in uv_args:
             if uv_type and uv_level:
                 uvs.append((uv_type, uv_level))
-    filtered = sheet[sheet["Item"].str.contains(name, case=False)]
+    filtered = sheet[sheet["Item"].str.contains(name, case=False, na=False)]
     for i, row in filtered.iterrows():
         if item_type == "Gear":
             if uvs and (row["UV"] != uvs_to_string(uvs)):
@@ -474,7 +475,7 @@ async def search(
 ):
     await ctx.defer(ephemeral = True)
     try:
-        await asyncio.wait_for(process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=60)
+        await asyncio.wait_for(process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level), timeout=600)
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
@@ -492,7 +493,11 @@ async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv
                         for owner in owners:
                             item_found.append(f"{owner},")
                         item_found.append(f"Price: {item['Price'] if item['Price'] else 'N/A'}")
-                        parts.append(" ".join(item_found))
+                        item_string = " ".join(item_found)
+                        if len("\n".join(parts)) + len(item_string) > 2000:
+                            await ctx.followup.send("\n".join(parts), ephemeral=True)
+                            parts = []
+                        parts.append(item_string)
             except gspread.WorksheetNotFound:
                 continue
         if len(parts) == 1:
