@@ -7,14 +7,11 @@ from discord.commands import Option
 from fastapi import FastAPI
 import uvicorn
 from google.oauth2.service_account import Credentials
-from oauth2client.service_account import ServiceAccountCredentials
 from dotenv import load_dotenv
-import requests
 import threading
 import time
 import pandas as pd
 import re
-import json
 
 from csv_parser import ITEM_LIST
 
@@ -23,7 +20,9 @@ load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 SHEET_NAME = "Quid Pro Quo Merch Sheet"
 SERVER_ID = int(os.getenv("SERVER_ID"))
+SALE_LOG_CHANNEL_ID = int(os.getenv("SALE_LOG_CHANNEL_ID"))
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
+TEST_SALE_LOG_CHANNEL_ID = int(os.getenv("TEST_SALE_LOG_CHANNEL_ID"))
 test = SHEET_NAME == "QPQ test sheet"
 recent_changes = []
 
@@ -267,12 +266,14 @@ async def additem(
             if item_price < 0:
                 raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
-        await ctx.respond(str(e))
+        await ctx.respond(str(e), ephemeral=True)
         return
-    await ctx.defer(ephemeral=False)
+    await ctx.defer(ephemeral=True)
     try:
-        await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
-        
+        result = await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
+        if result['status'] == 'success':
+            channel = bot.get_channel(SALE_LOG_CHANNEL_ID)
+            await channel.send(result['message'])
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
@@ -289,10 +290,10 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         sheet = spreadsheet.worksheet(item_type)
     except gspread.SpreadsheetNotFound:
         await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
-        return
+        return {'status': 'error', 'message': f"Spreadsheet '{SHEET_NAME}' not found."}
     except gspread.WorksheetNotFound:
         await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
-        return
+        return {'status': 'error', 'message': f"Worksheet for item type '{item_type}' not found."}
     row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     offset = 2 if item_type != "Gear" else 3
     if not row.empty:
@@ -317,8 +318,8 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
     if test:
         parts.append(f"- Note: This action was performed in the test sheet.")
     msg = "\n".join(parts)
-    await ctx.delete_initial_response()
-    await ctx.channel.send(msg, ephemeral = False)
+    await ctx.followup.send("Item added successfully!")
+    return {'status': 'success', 'message': msg}
 
 @bot.slash_command(name="removeitem", description="Remove an item from the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def removeitem(
@@ -344,11 +345,14 @@ async def removeitem(
             if item_price < 0:
                 raise ValueError("Price must be a non-negative integer.")
     except ValueError as e:
-        await ctx.respond(str(e))
+        await ctx.respond(str(e), ephemeral=True)
         return
-    await ctx.defer(ephemeral = False)
+    await ctx.defer(ephemeral = True)
     try:
-        await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner, price), timeout=60)
+        result = await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner, price), timeout=60)
+        if result['status'] == 'success':
+            channel = bot.get_channel(SALE_LOG_CHANNEL_ID)
+            await channel.send(result['message'])
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
     except Exception as e:
@@ -365,10 +369,10 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
         sheet = spreadsheet.worksheet(item_type)
     except gspread.SpreadsheetNotFound:
         await ctx.respond(f"Spreadsheet '{SHEET_NAME}' not found.")
-        return
+        return {'status': 'error', 'message': f"Spreadsheet '{SHEET_NAME}' not found."}
     except gspread.WorksheetNotFound:
         await ctx.respond(f"Worksheet for item type '{item_type}' not found.")
-        return
+        return {'status': 'error', 'message': f"Worksheet for item type '{item_type}' not found."}
     row = get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level)
     offset = 2 if item_type != "Gear" else 3
     if not row.empty:
@@ -376,7 +380,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
         current_amount = int(current_value) if current_value else 0
         if current_amount < amount:
             await ctx.respond(f"Cannot remove {amount} {name} from {username}. Current amount is {current_amount}.")
-            return
+            return {'status': 'error', 'message': f"Cannot remove {amount} {name} from {username}. Current amount is {current_amount}."}
         sheet.update_cell(int(row.index[0])+2, offset + user_index, current_amount - amount if current_amount - amount > 0 else "")
         cached_sheet = get_sheet(item_type)
         cached_sheet.at[int(row.index[0]), username] = str(current_amount - amount) if current_amount - amount > 0 else ""
@@ -387,7 +391,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
                 recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Removed from: {username}")
     else:
         await ctx.respond(f"Item '{name}' not found in inventory.")
-        return
+        return {'status': 'error', 'message': f"Item '{name}' not found in inventory."}
     parts = [f"Removed item: {name}"]
     if item_type == "Gear":
         parts.append(f"UVs: {uvs_to_string(uvs)}")
@@ -398,7 +402,8 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
     if price:
         parts.append(f"- Final sale price: {price}")
     msg = "\n".join(parts)
-    await ctx.respond(msg)
+    await ctx.followup.send("Item removed successfully!")
+    return {'status': 'success', 'message': msg}
 
 @bot.slash_command(name="switchsheet", description="Switch to a different sheet", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def switchsheet(
@@ -411,10 +416,15 @@ async def switchsheet(
     except asyncio.TimeoutError:
         await ctx.followup.send("The command timed out.")
 async def process_switch_sheet(ctx, sheet_name):
+    global SALE_LOG_CHANNEL_ID
     SHEET_NAME = sheet_name
     global test, spreadsheet
     spreadsheet = client_gs.open(SHEET_NAME)
     test = SHEET_NAME == "QPQ test sheet"
+    if test:
+        SALE_LOG_CHANNEL_ID = TEST_SALE_LOG_CHANNEL_ID
+    else:
+        SALE_LOG_CHANNEL_ID = int(os.getenv("SALE_LOG_CHANNEL_ID"))
     await ctx.followup.send(f"Switched to sheet: {SHEET_NAME}")
     return   
 
@@ -592,7 +602,6 @@ async def help_command(ctx: discord.ApplicationContext):
         "/clearrecap - Clear all items in the recap.\n"
         "/search - Search an item or by keyword in the sheet inventory.\n"
         "/addprice - Add or update the price of an item in the sheet inventory.\n"
-        "/help - Get help about the bot commands."
     )
     await ctx.respond(help_text)
 
