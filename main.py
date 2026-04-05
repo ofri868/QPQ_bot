@@ -135,7 +135,7 @@ def get_sheet(name):
 
 def load_sheet_from_google(sheet_name):
     worksheet = spreadsheet.worksheet(sheet_name)
-    values = worksheet.get_all_values()
+    values = worksheet.get("A:K")
 
     if not values:
         return pd.DataFrame()  # empty
@@ -303,7 +303,7 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         cached_sheet = get_sheet(item_type)
         cached_sheet.at[int(row.index[0]), username] = str(current_amount + int(amount))
     else:
-        sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index), value_input_option="USER_ENTERED")
+        sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index), value_input_option="USER_ENTERED", table_range='A1')
         cached_sheet = get_sheet(item_type)
         new_row = make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index)
         cached_sheet.loc[len(cached_sheet)] = new_row
@@ -509,7 +509,7 @@ async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv
             if results:
                 parts = [f"Search results for {name}:"]
                 for (item, owners) in results:
-                    item_found = [f"{item['Item']},{'' if itype != 'Gear' else ' ' + item['UV']}"]
+                    item_found = [f"{item['Item']},{'' if item_type != 'Gear' else ' ' + item['UV']}"]
                     item_found.append("owned by:")
                     for owner in owners:
                         item_found.append(f"{owner},")
