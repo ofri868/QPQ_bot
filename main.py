@@ -179,7 +179,7 @@ def get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type
         item = sheet[sheet["Item"].str.contains(name)]
     return item
 
-def make_new_row(name, item_type, uvs, amount, price, user_index):
+def make_new_row(name, item_type, uvs, amount, price, user_index, local=False):
     offset = 2 if item_type != "Gear" else 3
     sheet = get_sheet(item_type)
     user_col = offset-1 + user_index
@@ -191,9 +191,12 @@ def make_new_row(name, item_type, uvs, amount, price, user_index):
     row[user_col] = amount
     row[-1] = price if price else ""
     next_row = len(sheet) + 2
-    first_col = chr(ord("A") + offset)
-    last_col = chr(ord("A") + offset + num_users - 1)
-    row[offset-1] = f"=SUM({first_col}{next_row}:{last_col}{next_row})"
+    if not local:
+        first_col = chr(ord("A") + offset)
+        last_col = chr(ord("A") + offset + num_users - 1)
+        row[offset-1] = f"=SUM({first_col}{next_row}:{last_col}{next_row})"
+    else:
+        row[offset-1] = str(amount)
     return row
 
 def get_name(name, owner):
@@ -253,7 +256,7 @@ def load_string(default_value=""):
     
     # Otherwise, just read it
     with open(FILENAME, "r", encoding="utf-8") as f:
-        return f.read().strip()
+        return f.read().strip().split("\n")
 
 def save_string(text):
     # 'a' mode appends to the file if it exists or creates it if it doesn't
@@ -321,9 +324,9 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         cached_sheet = get_sheet(item_type)
         cached_sheet.at[int(row.index[0]), username] = str(current_amount + int(amount))
     else:
-        sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index), value_input_option="USER_ENTERED", table_range='A1')
+        sheet.append_row(make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index, local=False), value_input_option="USER_ENTERED", table_range='A1')
         cached_sheet = get_sheet(item_type)
-        new_row = make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index)
+        new_row = make_new_row(name, item_type, uvs_to_string(uvs), amount, price, user_index, local=True)
         cached_sheet.loc[len(cached_sheet)] = new_row
         if not test:
             recent_changes.append(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {username}")
