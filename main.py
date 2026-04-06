@@ -23,6 +23,7 @@ SERVER_ID = int(os.getenv("SERVER_ID"))
 SALE_LOG_CHANNEL_ID = int(os.getenv("SALE_LOG_CHANNEL_ID"))
 TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
 TEST_SALE_LOG_CHANNEL_ID = int(os.getenv("TEST_SALE_LOG_CHANNEL_ID"))
+FILENAME = "recent_changes.txt"
 test = SHEET_NAME == "QPQ test sheet"
 recent_changes = []
 
@@ -243,6 +244,22 @@ def search_item(item_type, name,uv1_type, uv1_level, uv2_type, uv2_level, uv3_ty
         results.append((row, owners))
     return results
 
+def load_string(default_value=""):
+    # If the file doesn't exist, create it with the default value
+    if not os.path.exists(FILENAME):
+        with open(FILENAME, "w", encoding="utf-8") as f:
+            f.write(default_value)
+        return default_value
+    
+    # Otherwise, just read it
+    with open(FILENAME, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+def save_string(text):
+    # 'a' mode appends to the file if it exists or creates it if it doesn't
+    with open(FILENAME, "a", encoding="utf-8") as f:
+        f.write(text+"\n")
+
 @bot.slash_command(name="additem", description="Add an item to the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def additem(
     ctx: discord.ApplicationContext,
@@ -310,6 +327,7 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
         cached_sheet.loc[len(cached_sheet)] = new_row
         if not test:
             recent_changes.append(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {username}")
+            save_string(f"Added item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Price: {price or 'N/A'}, Added to: {username}")
     parts = [f"Added item: {name}"]
     if item_type == "Gear":
         parts.append(f"UVs: {uvs_to_string(uvs)}")
@@ -390,6 +408,7 @@ async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_typ
             cached_sheet.drop(index=int(row.index[0]), inplace=True)
             if not test:
                 recent_changes.append(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Removed from: {username}")
+                save_string(f"Removed item: {name}, Type: {item_type}{', UVs: ' + uvs_to_string(uvs) if item_type == 'Gear' else ''}, Removed from: {username}")
     else:
         await ctx.respond(f"Item '{name}' not found in inventory.")
         return {'status': 'error', 'message': f"Item '{name}' not found in inventory."}
@@ -458,6 +477,8 @@ async def clear_recap(
 async def process_clear_recap(ctx):
     global recent_changes
     recent_changes = []
+    with open (FILENAME, "w", encoding="utf-8") as f:
+        f.write("")
     await ctx.followup.send(f"Recent changes cleared.")
     return
 
@@ -623,4 +644,5 @@ def refresh_cache():
 if __name__ == "__main__":
     threading.Thread(target=run_web).start()
     threading.Thread(target=refresh_cache).start()
+    recent_changes = load_string()
     bot.run(DISCORD_TOKEN)
