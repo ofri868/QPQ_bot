@@ -506,7 +506,7 @@ async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv
         if test:
             parts.append(f"- Note: This action was performed in the test sheet.")
         msg = "\n".join(parts)
-        await ctx.followup.send(msg)
+        await ctx.followup.send(msg, ephemeral=True)
         return
     else:
         try:
