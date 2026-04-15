@@ -174,9 +174,9 @@ def get_item(item_type, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type
         for uv_type, uv_level in uv_args:
             if uv_type and uv_level:
                 uvs.append((uv_type, uv_level))
-        item = sheet[(sheet["Item"].str.contains(name)) & (sheet["UV"] == uvs_to_string(uvs))]
+        item = sheet[(sheet["Item"].str.contains(name, na=False)) & (sheet["UV"] == uvs_to_string(uvs))]
     else:
-        item = sheet[sheet["Item"].str.contains(name)]
+        item = sheet[sheet["Item"].str.contains(name, na=False)]
     return item
 
 def make_new_row(name, item_type, uvs, amount, price, user_index, local=False):
