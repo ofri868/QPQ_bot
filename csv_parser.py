@@ -5,7 +5,9 @@ df=pd.read_csv('basic_items.csv')
 df = df[df["Group"] != "Vial"]
 df = df[df["Group"] != "Artifact"]
 df = df[df["Group"] != "Capsule"]
+df = df[df["Group"] != "Token"]
 df = df[~df["Config"].str.contains("Guild")]
+df = df[~df["Config"].str.contains("Harness")]
 df = df[~df["Config"].str.contains("Ticket/Variants/Custom")]
 # print(df.head())
 ITEM_LIST = set(df['Name'].tolist())
@@ -16,3 +18,4 @@ with open('items.txt', 'x', encoding='utf-8') as f:
         f.write(f"\"{item}\",")
     f.seek(f.tell() - 1)  # Move the file pointer back to overwrite the last comma
     f.write("]")
+print(len(ITEM_LIST))
