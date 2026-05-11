@@ -6,9 +6,10 @@ df = df[df["Group"] != "Vial"]
 df = df[df["Group"] != "Artifact"]
 df = df[df["Group"] != "Capsule"]
 df = df[df["Group"] != "Token"]
-df = df[~df["Config"].str.contains("Guild")]
+df = df[~df["Config"].str.contains("/Guild/")]
 df = df[~df["Config"].str.contains("Harness")]
 df = df[~df["Config"].str.contains("Ticket/Variants/Custom")]
+df = df[~df["Config"].str.contains("Furni/Trophy/Boss Trophy")]
 # print(df.head())
 ITEM_LIST = set(df['Name'].tolist())
 os.remove('items.txt') if os.path.exists('items.txt') else None
