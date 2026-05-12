@@ -14,8 +14,6 @@ import pandas as pd
 import re
 from csv_parser import parse_csv
 
-from csv_parser import ITEM_LIST
-
 # --- Environment Setup ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -64,9 +62,7 @@ async def on_ready():
 
 
 ITEM_TYPES = ["Gear", "Costumes", "Armor Aura", "Armor Ankle", "Armor Back", "Armor Front Arms", "Armor Rear", "Helm Side", "Helm Back", "Helm Front", "Helm Top Brow", "Misc"]
-ITEM_LIST = [] 
-ITEM_LIST.sort()
-LOWER_ITEM_LIST = [item.lower() for item in ITEM_LIST]
+ITEM_LIST = {}
 UV_TYPES = [
     "CTR", "ASI", "Fire", "Shock", "Poison", "Stun",
     "Freeze", "Curse", "Beast", "Slime", "Fiend",
@@ -111,7 +107,7 @@ async def item_name_autocomplete(ctx: discord.AutocompleteContext):
     if not user_input:
         return []
     results = []
-    for item in ITEM_LIST:
+    for item in ITEM_LIST.keys():
         if user_input in item.lower():
             results.append(item)
             if len(results) >= 25:
@@ -140,7 +136,7 @@ def load_sheet_from_google(sheet_name):
     values = worksheet.get(f"A:{last_col}")
 
     if not values:
-        return pd.DataFrame()  # empty
+        raise ValueError("Sheet is empty")
 
     header = values[0]
     rows = values[1:]
@@ -267,7 +263,6 @@ def save_string(text):
 async def additem(
     ctx: discord.ApplicationContext,
     name: str = Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
-    item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES),
     uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
     uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
     uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
@@ -291,7 +286,7 @@ async def additem(
         return
     await ctx.defer(ephemeral=True)
     try:
-        result = await asyncio.wait_for(process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
+        result = await asyncio.wait_for(process_add_item(ctx, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner), timeout=60)
         if result['status'] == 'success':
             channel = bot.get_channel(SALE_LOG_CHANNEL_ID)
             await channel.send(result['message'])
@@ -299,8 +294,9 @@ async def additem(
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
-async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner=None):
+async def process_add_item(ctx, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, price, owner=None):
     username, user_index = get_name(ctx.author.name, owner)
+    item_type = ITEM_LIST[name]
     uvs = []
     if item_type == "Gear": 
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
@@ -347,7 +343,6 @@ async def process_add_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, 
 async def removeitem(
     ctx: discord.ApplicationContext,
     name: str =  Option(description="Name of the item", required=True, autocomplete=item_name_autocomplete),
-    item_type: str = Option(description="Choose the item type", choices=ITEM_TYPES),
     uv1_type: str = Option(description="UV1 type", choices=UV_TYPES, required=False),
     uv1_level: str = Option(description="UV1 level", required=False, autocomplete=uv_level_autocomplete),
     uv2_type: str = Option(description="UV2 type", choices=UV_TYPES, required=False),
@@ -371,7 +366,7 @@ async def removeitem(
         return
     await ctx.defer(ephemeral = True)
     try:
-        result = await asyncio.wait_for(process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner, price), timeout=60)
+        result = await asyncio.wait_for(process_remove_item(ctx, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, int(amount), owner, price), timeout=60)
         if result['status'] == 'success':
             channel = bot.get_channel(SALE_LOG_CHANNEL_ID)
             await channel.send(result['message'])
@@ -379,9 +374,10 @@ async def removeitem(
         await ctx.followup.send("The command timed out.")
     except Exception as e:
         await ctx.followup.send(f"An error occurred: {str(e)}")
-async def process_remove_item(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner, price=None):
+async def process_remove_item(ctx, name, uv1_type, uv1_level, uv2_type, uv2_level, uv3_type, uv3_level, amount, owner, price=None):
     username, user_index = get_name(ctx.author.name, owner)
     uvs = []
+    item_type = ITEM_LIST[name]
     if item_type == "Gear":
         uv_args = [(uv1_type, uv1_level), (uv2_type, uv2_level), (uv3_type, uv3_level)]
         for uv_type, uv_level in uv_args:
