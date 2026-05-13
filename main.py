@@ -12,6 +12,7 @@ import threading
 import time
 import pandas as pd
 import re
+import logging
 
 from csv_parser import ITEM_LIST
 
@@ -25,7 +26,7 @@ TEST_SERVER_ID = int(os.getenv("TEST_SERVER_ID"))
 TEST_SALE_LOG_CHANNEL_ID = int(os.getenv("TEST_SALE_LOG_CHANNEL_ID"))
 FILENAME = "recent_changes.txt"
 test = SHEET_NAME == "QPQ test sheet"
-recent_changes = []
+logging.basicConfig(level=logging.ERROR)
 
 # --- Google Sheets Setup ---
 scope = ["https://spreadsheets.google.com/feeds",
@@ -48,6 +49,7 @@ app = FastAPI()
 
 # --- global variables ---
 sheet_cache = {}
+recent_changes = []
 
 @app.get("/")
 async def root():
@@ -576,7 +578,7 @@ async def process_search(ctx, name, item_type, uv1_type, uv1_level, uv2_type, uv
                 if test:
                     parts.append(f"- Note: This action was performed in the test sheet.")
                 msg = "\n".join(parts)
-                await ctx.followup.send(msg)
+                await ctx.followup.send(msg, ephemeral=True)
                 return
             else:
                 await ctx.followup.send(f"No results found for {name} in inventory.")
@@ -594,40 +596,39 @@ async def item_list(
     try:
         await asyncio.wait_for(process_item_list(ctx, owner), timeout=60)
     except asyncio.TimeoutError:
-        await ctx.followup.send("The command timed out.")
+        await ctx.followup.send("The command timed out.", ephemeral=True)
     except Exception as e:
-        await ctx.followup.send(f"An error occurred: {str(e)}")
+        logging.error("An error occurred during calculation", exc_info=True)
+        await ctx.followup.send(f"An error occurred: {str(e)}", ephemeral=True)
 async def process_item_list(ctx, owner):
-    if owner is None:
-        owner = USERNAME_DICT[ctx.author.name][0]
-    parts = [f"Inventory for {owner}:"]
-    for item_type in ITEM_TYPES:
-        try:
-            sheet = get_sheet(item_type)
-            user_col = USERNAME_DICT[owner][1] + (2 if item_type != "Gear" else 3)
-            owned_items = sheet[sheet.iloc[:, user_col].notna()]
-            if not owned_items.empty:
-                parts.append(f"\n{item_type}:")
-                for i, row in owned_items.iterrows():
-                    item_str = f"{row['Item']}"
-                    if item_type == "Gear":
-                        item_str += f" {row['UV']}" if row['UV'] and row['UV'] != "clean" else ""
-                    price = re.search(r'\d+(?:\.\d+)?(?:e|ke|cr|kcr)', str(row['Price'])) if len(str(row['Price'])) > 0 else ""
-                    price = price[0] if price else ""
-                    item_str += f" - {price}" if price != "" else ""
-                    if len("\n".join(parts)) + len(item_str) > 2000:
-                            await ctx.followup.send("\n".join(parts), ephemeral=True)
-                            parts = []
-                    parts.append(item_str)
-        except gspread.WorksheetNotFound:
-            continue
-    if len(parts) == 1:
-        await ctx.followup.send(f"{owner} has no items in inventory.")
+    username, user_index = get_name(ctx.author.name, owner)
+    line_count = 0
+    with open("item_list_response.txt", 'w+', encoding="utf-8") as f:
+        f.write(f"Inventory for {username}:")
+        for item_type in ITEM_TYPES:
+            try:
+                sheet = get_sheet(item_type)
+                owned_items = sheet[sheet[username].notna() & sheet[username] > 0]
+                if not owned_items.empty:
+                    f.write(f"\n\n{item_type}:")
+                    for i, row in owned_items.iterrows():
+                        item_str = f"{row['Item']}"
+                        if item_type == "Gear":
+                            item_str += f" {row['UV']}" if row['UV'] and row['UV'] != "clean" else ""
+                        price = re.search(r'\d+(?:\.\d+)?(?:e|ke|cr|kcr)', str(row['Price'])) if len(str(row['Price'])) > 0 else ""
+                        price = price[0] if price else ""
+                        item_str += f" - {price}" if price != "" else ""
+                        f.write("\n" + item_str)
+            except gspread.WorksheetNotFound:
+                continue
+        line_count = sum(1 for _ in f)
+    if line_count == 2:
+        await ctx.followup.send(f"{username} has no items in inventory.", ephemeral=True)
         return
+    msg = "item list generated"
     if test:
-        parts.append(f"- Note: This action was performed in the test sheet.")
-    msg = "\n".join(parts)
-    await ctx.followup.send(msg)
+        msg += f"\n- Note: This action was performed in the test sheet."
+    await ctx.followup.send(content=msg, file=discord.File("item_list_response.txt"))
 
 @bot.slash_command(name="addprice", description="Add or update the price of an item in the sheet inventory", guild_ids=[SERVER_ID, TEST_SERVER_ID])
 async def add_price(
